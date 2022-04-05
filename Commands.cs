@@ -13,6 +13,8 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.EditorInput;
+using System.Net.Http;
+using Autodesk.AutoCAD.ApplicationServices;
 
 namespace PlottingCoord
 {
@@ -70,6 +72,26 @@ namespace PlottingCoord
             }
             return _floodData;
         }
+        public static async Task<FloodData> FromUrl(string url)
+        {
+            var client = new HttpClient(); // ideally this would be created from IHttpClientFactory
+            var request = new HttpRequestMessage
+            {
+                Method = HttpMethod.Post,
+                RequestUri = new Uri(url),
+                Headers =
+                {
+                    { "Ocp-Apim-Subscription-Key", "46c9d0572acb43c7bda876002c4bd765" },
+                },
+            };
+            using (var response = await client.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                var body = await response.Content.ReadAsStringAsync();
+                _floodData = JsonConvert.DeserializeObject<FloodData>(body);
+            };
+            return _floodData;
+        }
 
         public List<FloodPoint> GetFloodPoints()
         {
@@ -100,12 +122,13 @@ namespace PlottingCoord
     public class Commands
     {
         private static readonly Dictionary<Handle, double> FLoodProbablityMapper = new Dictionary<Handle, double>();
+        private const string FLOOD_POINT_URL = "https://connectio-helix.azure-api.net/flood/workflows/4cfdcf1a996a4f509f5f5aa4acc57a5c/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=bgdWXjIdykWA-aRRSKJX9don6Z9nuKHBLmoK_1fj4Pk";
         [CommandMethod("PlotCoords")]
-        public static void PlotCoords()
+        public static async void PlotCoords()
         {
 
-            var files = Directory.GetFiles(@"D:\Work\Forge\LatLongC3D\PlottingCoord\sample_x_y\", "*.json");
-           
+            //var files = Directory.GetFiles(@"D:\Work\Forge\LatLongC3D\PlottingCoord\sample_x_y\", "*.json");
+            
             var doc = Application.DocumentManager.MdiActiveDocument;
             var ed = doc.Editor;
             ed.PointMonitor += Ed_PointMonitor;
@@ -118,25 +141,25 @@ namespace PlottingCoord
                 {
                     FLoodProbablityMapper.Clear();
                 }
-                foreach (var file in files)
+                      
+                var floodData = await FloodData.FromUrl(FLOOD_POINT_URL);
+                
+                var floodPoints = floodData.GetFloodPoints();
+                // Get the drawing's GeoLocation object
+                var gd = tr.GetObject(db.GeoDataObject, OpenMode.ForRead) as GeoLocationData;
+                foreach (var point in floodPoints)
                 {
-                    var floodData = FloodData.FromJson(file);
-                    var floodPoints = floodData.GetFloodPoints();
-                    // Get the drawing's GeoLocation object
-                    var gd = tr.GetObject(db.GeoDataObject, OpenMode.ForRead) as GeoLocationData;
-                    foreach (var point in floodPoints)
+                    if (point.Prediction == 1)
                     {
-                        if (point.Prediction == 1)
-                        {
-                            var geoPoint = new Point3d(point.X, point.Y, 0.0);
-                            Point3d targetPt = transformer.TransformPoint(geoPoint);
-                            Point3d wcsPt = gd.TransformFromLonLatAlt(targetPt);
-                            var c = GetColorIntensity(Color.FromRgb(255, 0, 0), point.Probability);
-                            DrawPoint(c, wcsPt, point.Probability);
-                        }
+                        var geoPoint = new Point3d(point.X, point.Y, 0.0);
+                        Point3d targetPt = transformer.TransformPoint(geoPoint);
+                        Point3d wcsPt = gd.TransformFromLonLatAlt(targetPt);
+                        var c = GetColorIntensity(Color.FromRgb(255, 0, 0), point.Probability);
+                        DrawPoint(c, wcsPt, point.Probability);
                     }
-                    tr.Commit();               
                 }
+                tr.Commit();               
+                
             }            
         }
 
@@ -197,7 +220,7 @@ namespace PlottingCoord
         }       
         private static bool HasGeoData(Database db)
         {
-            // Check whether the drawing already has geolocation data
+            // Check whether the drawing already has geo-location data
             bool hasGeoData = false;
             try
             {
@@ -212,26 +235,41 @@ namespace PlottingCoord
             var doc = Application.DocumentManager.MdiActiveDocument;
             var db = doc.Database;
             var brefId = ObjectId.Null;
-            using (OpenCloseTransaction t = new OpenCloseTransaction())
+            Autodesk.AutoCAD.DatabaseServices.TransactionManager tm = db.TransactionManager;
+            try
             {
-                // Open the Block table for read
-                var blockTable = t.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
-                // Open the Block table record for read
-                if(!(t.GetObject(blockTable["FloodPoint"], OpenMode.ForRead) is BlockTableRecord floodBlock))
+                using (DocumentLock docloc = doc.LockDocument())
                 {
-                    return brefId;
+                    using (Autodesk.AutoCAD.DatabaseServices.OpenCloseTransaction t = tm.StartOpenCloseTransaction())
+                    {
+                        // Open the Block table for read
+                        var blockTable = t.GetObject(db.BlockTableId, OpenMode.ForRead) as BlockTable;
+                        // Open the Block table record for read
+                        if (!(t.GetObject(blockTable["FloodPoint"], OpenMode.ForRead) is BlockTableRecord floodBlock))
+                        {
+                            return brefId;
+                        }
+                        using (var bref = new BlockReference(position, floodBlock.ObjectId)
+                        {
+                            Color = c,
+                            ScaleFactors = Scale3d.ExtractScale(Matrix3d.Scaling(1000, position))
+                        })
+                        {
+                            var modelSpace = t.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite) as BlockTableRecord;
+                            brefId = modelSpace.AppendEntity(bref);
+                            t.AddNewlyCreatedDBObject(bref, true);
+                            FLoodProbablityMapper.Add(brefId.Handle, factor);
+                        }
+                        t.Commit();
+                    }
                 }
-                var bref = new BlockReference(position, floodBlock.ObjectId)
-                {
-                    Color = c,
-                    ScaleFactors = Scale3d.ExtractScale(Matrix3d.Scaling(1000, position))
-                };
-                var modelSpace = t.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(db), OpenMode.ForWrite) as BlockTableRecord;
-                brefId = modelSpace.AppendEntity(bref);
-                t.AddNewlyCreatedDBObject(bref, true);
-                FLoodProbablityMapper.Add(brefId.Handle, factor);
-                t.Commit();
+                
             }
+            catch (Autodesk.AutoCAD.Runtime.Exception ex)
+            { 
+                doc.Editor.WriteMessage(ex.Message);
+            }         
+
             return brefId;
         }  
 
