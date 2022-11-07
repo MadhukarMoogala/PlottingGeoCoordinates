@@ -2,6 +2,24 @@
 
 Geographical Coordinates with respective Lat\Long for given [Cooridnate Reference System]((https://en.wikipedia.org/wiki/Spatial_reference_system)) the point data-set maybe very large, it is need not require to place with same magnitude in AutoCAD drawing, we can use [GeoCoordinateTransformer](https://help.autodesk.com/view/OARX/2022/ENU/?guid=OARX-ManagedRefGuide-Autodesk_AutoCAD_DatabaseServices_GeoCoordinateTransformer) API to transform the GeoCooridnate Point to WCS Point.
 
+This project reads Point dataset from supplement JSON, each file contains json serializable data with this data (CRS, prediction, probability, lat, lon). There is 256*256=65,536 data points in each file. The points are of very large coordinates as seen from sample dataset.
+
+```
+    /************
+     * 
+     * Geo Marker
+     * 
+        Long = -87.961526837297455
+        Lat = 41.948856487413423
+ 
+        Y=5153321.469906129,
+        X=-9791832.37692682
+     * 
+     * 
+     * **********/
+
+```
+
 ### Dependencies
 
 This application is tested on AutoCAD 2022, but it should work for previous versions and new versions of AutoCAD as well.
