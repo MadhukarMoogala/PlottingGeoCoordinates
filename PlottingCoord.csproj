@@ -53,19 +53,19 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="AcCoreMgd, Version=24.1.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\AutoCAD.NET.Core.24.1.51000\lib\net47\AcCoreMgd.dll</HintPath>
+      <HintPath>packages\AutoCAD.NET.Core.24.1.51000\lib\net47\AcCoreMgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="AcDbMgd, Version=24.1.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\AutoCAD.NET.Model.24.1.51000\lib\net47\AcDbMgd.dll</HintPath>
+      <HintPath>packages\AutoCAD.NET.Model.24.1.51000\lib\net47\AcDbMgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="acdbmgdbrep, Version=24.1.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\AutoCAD.NET.Model.24.1.51000\lib\net47\acdbmgdbrep.dll</HintPath>
+      <HintPath>packages\AutoCAD.NET.Model.24.1.51000\lib\net47\acdbmgdbrep.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.13.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <HintPath>packages\Newtonsoft.Json.13.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -82,8 +82,13 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="app.config" />
     <None Include="packages.config" />
+    <None Include="sample_x_y\sample_071200040403_2_5_5.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="sample_x_y\sample_071200040403_2_8_8.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

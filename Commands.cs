@@ -15,6 +15,7 @@ using Autodesk.AutoCAD.Geometry;
 using Autodesk.AutoCAD.EditorInput;
 using System.Net.Http;
 using Autodesk.AutoCAD.ApplicationServices;
+using System.Reflection;
 
 namespace PlottingCoord
 {
@@ -50,6 +51,11 @@ namespace PlottingCoord
 
         [JsonProperty("crs", NullValueHandling = NullValueHandling.Ignore)]
         public string Crs { get; set; }
+
+        public static implicit operator Task<object>(FloodData v)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     public partial class FloodPoint
@@ -81,7 +87,7 @@ namespace PlottingCoord
                 RequestUri = new Uri(url),
                 Headers =
                 {
-                    { "Ocp-Apim-Subscription-Key", "46c9d0572acb43c7bda876002c4bd765" },
+                    { "Key", "Value" },//You need to get server Key and Value
                 },
             };
             using (var response = await client.SendAsync(request))
@@ -122,12 +128,22 @@ namespace PlottingCoord
     public class Commands
     {
         private static readonly Dictionary<Handle, double> FLoodProbablityMapper = new Dictionary<Handle, double>();
-        private const string FLOOD_POINT_URL = "https://connectio-helix.azure-api.net/flood/workflows/4cfdcf1a996a4f509f5f5aa4acc57a5c/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=bgdWXjIdykWA-aRRSKJX9don6Z9nuKHBLmoK_1fj4Pk";
+        private const string FLOOD_POINT_URL = default;
+        public static string DLLDirectory
+        {
+            get
+            {
+                string codeBase = Assembly.GetExecutingAssembly().CodeBase;
+                UriBuilder uri = new UriBuilder(codeBase);
+                string path = Uri.UnescapeDataString(uri.Path);
+                return Path.GetDirectoryName(path);
+            }
+        }
         [CommandMethod("PlotCoords")]
         public static async void PlotCoords()
         {
 
-            //var files = Directory.GetFiles(@"D:\Work\Forge\LatLongC3D\PlottingCoord\sample_x_y\", "*.json");
+           var files = Directory.GetFiles(Path.Combine(DLLDirectory, "sample_x_y"), "*.json");
             
             var doc = Application.DocumentManager.MdiActiveDocument;
             var ed = doc.Editor;
@@ -141,25 +157,34 @@ namespace PlottingCoord
                 {
                     FLoodProbablityMapper.Clear();
                 }
-                      
-                var floodData = await FloodData.FromUrl(FLOOD_POINT_URL);
-                
-                var floodPoints = floodData.GetFloodPoints();
-                // Get the drawing's GeoLocation object
-                var gd = tr.GetObject(db.GeoDataObject, OpenMode.ForRead) as GeoLocationData;
-                foreach (var point in floodPoints)
-                {
-                    if (point.Prediction == 1)
-                    {
-                        var geoPoint = new Point3d(point.X, point.Y, 0.0);
-                        Point3d targetPt = transformer.TransformPoint(geoPoint);
-                        Point3d wcsPt = gd.TransformFromLonLatAlt(targetPt);
-                        var c = GetColorIntensity(Color.FromRgb(255, 0, 0), point.Probability);
-                        DrawPoint(c, wcsPt, point.Probability);
-                    }
+                dynamic floodData;
+                if (!string.IsNullOrEmpty(FLOOD_POINT_URL)) {
+
+                    floodData = await FloodData.FromUrl(FLOOD_POINT_URL);
                 }
-                tr.Commit();               
-                
+                else
+                {
+                    foreach(var file in files)
+                    {
+                        floodData =  FloodData.FromJson(file);
+                        var floodPoints = floodData.GetFloodPoints();
+                        // Get the drawing's GeoLocation object
+                        var gd = tr.GetObject(db.GeoDataObject, OpenMode.ForRead) as GeoLocationData;
+                        foreach (var point in floodPoints)
+                        {
+                            if (point.Prediction == 1)
+                            {
+                                var geoPoint = new Point3d(point.X, point.Y, 0.0);
+                                Point3d targetPt = transformer.TransformPoint(geoPoint);
+                                Point3d wcsPt = gd.TransformFromLonLatAlt(targetPt);
+                                var c = GetColorIntensity(Color.FromRgb(255, 0, 0), point.Probability);
+                                DrawPoint(c, wcsPt, point.Probability);
+                            }
+                        }
+                    }                    
+                }                
+                tr.Commit();            
+
             }            
         }
 
